@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Finch Web App</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Welcome to Finch!</h1>
+      <p>
+        <input id="provider_id" placeholder="provider_id" />
+        <button id="connect">Connect</button>
+      </p>
+      <p id="status"></p>
+      <section id="company"></section>
+      <section id="directory"></section>
+      <section id="detail"></section>
+    </main>
+    <script>
+      let connectionId = "";
+
+      // Clean up the data for display
+      function render(value) {
+        // If the value is null, undefined, or an empty string, return an empty string
+        if (value === null || value === undefined || value === "") return "";
+        // If the value is not an object, return the string value
+        if (typeof value !== "object") return String(value);
+        // If the value is an array, return a list of the items
+        if (Array.isArray(value)) {
+          return "<ul>" + value.map((item) => "<li>" + render(item) + "</li>").join("") + "</ul>";
+        }
+        // If the value is an object, return a list of the key-value pairs
+        return "<dl>" + Object.entries(value).map(([key, val]) =>
+          "<dt>" + key + "</dt><dd>" + render(val) + "</dd>"
+        ).join("") + "</dl>";
+      }
+      
+      // When the connect button is clicked, create a new connection with the given provider
+      document.getElementById("connect").onclick = () => {
+        const provider_id = document.getElementById("provider_id").value;
+        fetch("/api/connect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider_id }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.error) {
+              document.getElementById("status").textContent = data.error;
+              return;
+            }
+            // Render the company information
+            document.getElementById("company").innerHTML = "<h2>Company</h2>" + render(data.company);
+            connectionId = data.connection_id;
+
+            // Render the directory information
+            const people = (data.directory && data.directory.individuals) || [];
+            document.getElementById("directory").innerHTML =
+              "<h2>People</h2><ul>" +
+              people
+                .map((person) =>
+                  "<li><button data-id=\"" + person.id + "\">" + person.first_name + " " + person.last_name + "</button></li>"
+                )
+                .join("") +
+              "</ul>";
+          })
+          .catch(() => {
+            document.getElementById("status").textContent = "Connect failed.";
+          });
+        };
+
+        // When a person is clicked, get the person's information
+        document.getElementById("directory").onclick = (event) => {
+          const id = event.target.dataset.id;
+          if (!id) return;
+          fetch("/api/person?connection_id=" + encodeURIComponent(connectionId) + "&individual_id=" + encodeURIComponent(id))
+            .then((res) => res.json())
+            .then((detail) => {
+              if (detail.error) {
+                document.getElementById("status").textContent = detail.error;
+                return;
+              }
+              // Render the person's information
+              document.getElementById("detail").innerHTML = render(detail);
+            })
+            .catch(() => {
+              document.getElementById("status").textContent = "Person detail failed.";
+            });
+        };
+      </script>
+    </body>
+  </html>
